@@ -53,7 +53,7 @@ CQEVENT(int32_t, __eventStartup, 0)() {
 * 本函数调用完毕后，酷Q将很快关闭，请不要再通过线程等方式执行其他代码。
 */
 CQEVENT(int32_t, __eventExit, 0)() {
-
+	CQ_addLog(ac, CQLOG_INFO, "保存", std::to_string(saveDefs(true)).c_str());
 	return 0;
 }
 

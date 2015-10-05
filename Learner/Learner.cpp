@@ -26,18 +26,21 @@ public:
 map<int64_t, CLearn> waitlist;
 list<Def> defs;
 int saveCount = 0;
-void saveDefs() {
+int saveDefs(bool force) {
 	CQ_addLog(ac, CQLOG_INFO, "保存", std::to_string(saveCount).c_str());
 	saveCount++;
-	if (saveCount % 5 == 0) {
+	int i = 0;
+	if (saveCount % 5 == 0 || force) {		
 		ofstream myfile;
 		myfile.open("LearnerDefs.txt");
 		list<Def>::iterator p;
 		for (p = defs.begin(); p != defs.end(); p++) {
 			myfile << p->word << "\n" << p->definition << "\n";
+			i++;
 		}
 		myfile.close();
 	}
+	return i;
 }
 wstring GetWstringFromChar(const char* ch) {
 	string str = string(ch);
@@ -77,53 +80,99 @@ int ProcessMessage(int32_t subType, int32_t sendTime, int64_t fromGroup, int64_t
 			defs.push_back(def);
 			CQ_addLog(ac, CQLOG_INFO, "发现定义", str.c_str());
 			SendBackMessage(fromGroup, fromQQ, ("“" + def.word + "”已被定义为“" + def.definition + "”").c_str());
-			saveDefs();
+			saveDefs(false);
 			return EVENT_BLOCK;
 		}		
 	}
-	if (str.substr(0, 4) == "！定义") {
+	if (str.substr(0, 6) == "！定义") {
 		CLearn learn;
-		learn.word = str.substr(4, str.length());
+		learn.word = str.substr(6, str.length());
 		if (learn.word.length() < 1) {
 			CQ_sendPrivateMsg(ac, fromQQ, "定义词汇长度不能为0");
 		}
 		else {
+			string result;
+			bool flag = false;
 			for (lp = defs.begin(); lp != defs.end(); lp++) {
 				if (lp->word == learn.word) {
-					SendBackMessage(fromGroup, fromQQ,("对“" + lp->word + "”的定义有“" + lp->definition + "”").c_str());
+					flag = true;
+					result = result + "对“" + lp->word + "”的定义有“" + lp->definition + "”\n";
 				}
 			}
+			if (flag) {
+				result = result.erase(result.size() - 1);
+				SendBackMessage(fromGroup, fromQQ, result.c_str());
+			}
+			
 			learn.fromQQ = fromQQ;
 			learn.fromGroup = fromGroup;
 			learn.state = CLearn::STATE_WAITFORDEFINITION;
 			waitlist.insert(pair<int, CLearn>(fromQQ, learn));
 			SendBackMessage(fromGroup, fromQQ, ("请输入对“" + learn.word + "”的定义").c_str());
 		}
-		saveDefs();
+//		saveDefs();
 		return EVENT_BLOCK;
 	}
-	if (str.substr(0, 4) == "！擦除") {
+	if (str.substr(0, 6) == "！擦除") {
 		CLearn learn;
-		learn.word = str.substr(4, str.length());
+		learn.word = str.substr(6, str.length());
 		if (learn.word.length() < 1) {
-			CQ_sendPrivateMsg(ac, fromQQ, "定义词汇长度不能为0");
+			SendBackMessage(fromGroup, fromQQ, "定义词汇长度不能为0");
 		}
 		else {
+			string result;
+			bool flag = false;
 			for (lp = defs.begin(); lp != defs.end(); lp++) {
 				if (lp->word == learn.word) {
-					SendBackMessage(fromGroup, fromQQ, ("对“" + lp->word + "”的定义有“" + lp->definition + "”，已擦除").c_str());
+					flag = true;
+					result = result + "对“" + lp->word + "”的定义有“" + lp->definition + "”，已擦除\n";
 					defs.erase(lp);
 				}
 			}
+			if (flag) {
+				result = result.erase(result.size() - 1);
+				SendBackMessage(fromGroup, fromQQ, result.c_str());
+			}
+			
 		}
-		saveDefs();
+		saveDefs(false);
 		return EVENT_BLOCK;
 	}
-	for (lp = defs.begin(); lp != defs.end(); lp++) {
-		if (lp->word == msg) {
-			SendBackMessage(fromGroup, fromQQ, lp->definition.c_str());
+	if (str.substr(0, 6) == "！显示") {
+		int j = 0;
+		string result;
+		bool flag = false;
+		for (lp = defs.begin(); lp != defs.end(); lp++) {
+			if (j > 10) {
+				break;
+			}
+			flag = true;
+			j++;
+			result = result + "“" + lp->word + "”对应“" + lp->definition + "”\n";			
 		}
+		if (flag) {
+			result = result.erase(result.size() - 1);
+			SendBackMessage(fromGroup, fromQQ, result.c_str());
+		}		
+		return EVENT_BLOCK;
 	}
+	if (str.substr(0, 6) == "！保存"){
+		SendBackMessage(fromGroup, fromQQ, ("共保存" + std::to_string(saveDefs(true)) + "条词条").c_str());
+		return EVENT_BLOCK;
+	}
+	string result;
+	bool flag = false;
+	for (lp = defs.begin(); lp != defs.end(); lp++) {		
+		if (lp->word == str) {
+			flag = true;
+			result = result + lp->definition + "\n";
+		}		
+	}
+	if (flag) {
+		result = result.erase(result.size() - 1);
+		SendBackMessage(fromGroup, fromQQ, result.c_str());
+	}
+	
 	return EVENT_IGNORE;
 }
 int ProcessPrivate(int32_t subType, int32_t sendTime, int64_t fromQQ, const char *msg, int32_t font) {	
