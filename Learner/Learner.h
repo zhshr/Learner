@@ -10,7 +10,12 @@
 #define LEARNER_API __declspec(dllimport)
 #endif
 
-
+#include <list>
 using namespace std;
+struct Def {
+	string word;
+	string definition;
+};
+extern list<Def> defs;
 int ProcessPrivate(int32_t subType, int32_t sendTime, int64_t fromQQ, const char *msg, int32_t font);
 int ProcessGroup(int32_t subType, int32_t sendTime, int64_t fromGroup, int64_t fromQQ, const char *fromAnonymous, const char *msg, int32_t font);

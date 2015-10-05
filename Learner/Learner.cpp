@@ -9,7 +9,8 @@
 #include "cqp.h"
 #include <list>
 #include <map>
-
+#include <iostream>
+#include <fstream>
 
 using namespace std;
 class CLearn {
@@ -21,9 +22,23 @@ public:
 	string word;
 	string definition;
 };
-map<int64_t, CLearn> waitlist;
-list<CLearn> defs;
 
+map<int64_t, CLearn> waitlist;
+list<Def> defs;
+int saveCount = 0;
+void saveDefs() {
+	CQ_addLog(ac, CQLOG_INFO, "保存", std::to_string(saveCount).c_str());
+	saveCount++;
+	if (saveCount % 5 == 0) {
+		ofstream myfile;
+		myfile.open("LearnerDefs.txt");
+		list<Def>::iterator p;
+		for (p = defs.begin(); p != defs.end(); p++) {
+			myfile << p->word << "\n" << p->definition << "\n";
+		}
+		myfile.close();
+	}
+}
 wstring GetWstringFromChar(const char* ch) {
 	string str = string(ch);
 	int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
@@ -50,20 +65,23 @@ void SendBackMessage(int64_t fromGroup, int64_t fromQQ, const char*msg) {
 int ProcessMessage(int32_t subType, int32_t sendTime, int64_t fromGroup, int64_t fromQQ, const char *fromAnonymous, const char *msg, int32_t font) {
 	string str = string(msg);
 	map<int64_t, CLearn>::iterator p;
-	list<CLearn>::iterator lp;
+	list<Def>::iterator lp;
 	if ((p = waitlist.find(fromQQ)) != waitlist.end()) {
 		//发现等待中的定义
 		CLearn learn = p->second;
 		if (learn.fromQQ == fromQQ && learn.fromGroup == fromGroup) {
 			waitlist.erase(p);
-			learn.definition = str;
-			defs.push_back(learn);
+			Def def;
+			def.word = learn.word;
+			def.definition = str;
+			defs.push_back(def);
 			CQ_addLog(ac, CQLOG_INFO, "发现定义", str.c_str());
-			SendBackMessage(fromGroup, fromQQ, ("“" + learn.word + "”已被定义为“" + learn.definition + "”").c_str());
+			SendBackMessage(fromGroup, fromQQ, ("“" + def.word + "”已被定义为“" + def.definition + "”").c_str());
+			saveDefs();
 			return EVENT_BLOCK;
 		}		
 	}
-	if (str.substr(0, 4) == "定义") {
+	if (str.substr(0, 4) == "！定义") {
 		CLearn learn;
 		learn.word = str.substr(4, str.length());
 		if (learn.word.length() < 1) {
@@ -72,7 +90,7 @@ int ProcessMessage(int32_t subType, int32_t sendTime, int64_t fromGroup, int64_t
 		else {
 			for (lp = defs.begin(); lp != defs.end(); lp++) {
 				if (lp->word == learn.word) {
-					SendBackMessage(fromGroup, fromQQ,("对“" + lp->word + "”的定义“" + lp->definition + "”已擦除，请输入新的定义").c_str());
+					SendBackMessage(fromGroup, fromQQ,("对“" + lp->word + "”的定义有“" + lp->definition + "”").c_str());
 				}
 			}
 			learn.fromQQ = fromQQ;
@@ -81,9 +99,26 @@ int ProcessMessage(int32_t subType, int32_t sendTime, int64_t fromGroup, int64_t
 			waitlist.insert(pair<int, CLearn>(fromQQ, learn));
 			SendBackMessage(fromGroup, fromQQ, ("请输入对“" + learn.word + "”的定义").c_str());
 		}
+		saveDefs();
 		return EVENT_BLOCK;
 	}
-
+	if (str.substr(0, 4) == "！擦除") {
+		CLearn learn;
+		learn.word = str.substr(4, str.length());
+		if (learn.word.length() < 1) {
+			CQ_sendPrivateMsg(ac, fromQQ, "定义词汇长度不能为0");
+		}
+		else {
+			for (lp = defs.begin(); lp != defs.end(); lp++) {
+				if (lp->word == learn.word) {
+					SendBackMessage(fromGroup, fromQQ, ("对“" + lp->word + "”的定义有“" + lp->definition + "”，已擦除").c_str());
+					defs.erase(lp);
+				}
+			}
+		}
+		saveDefs();
+		return EVENT_BLOCK;
+	}
 	for (lp = defs.begin(); lp != defs.end(); lp++) {
 		if (lp->word == msg) {
 			SendBackMessage(fromGroup, fromQQ, lp->definition.c_str());
