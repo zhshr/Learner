@@ -11,6 +11,7 @@
 #include "Learner.h"
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
 using namespace std;
 
@@ -65,20 +66,8 @@ CQEVENT(int32_t, __eventExit, 0)() {
 */
 CQEVENT(int32_t, __eventEnable, 0)() {
 	enabled = true;
-	string line;
-	ifstream myfile("LearnerDefs.txt");
-	int i = 0;
-	if (myfile.is_open()) {
-		while (getline(myfile, line)) {
-			i++;
-			Def def;
-			def.word = line;
-			getline(myfile, line);
-			def.definition = line;
-			defs.push_back(def);
-		}
-	}
-	CQ_addLog(ac, CQLOG_INFO, "载入词条", std::to_string(i).c_str());
+	readDefs();
+	CQ_sendGroupMsg(ac, 493759584, "滴答，机器人刚刚重启啦~~");
 	return 0;
 }
 
