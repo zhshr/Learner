@@ -31,22 +31,31 @@ public:
 map<int64_t, CLearn> waitlist;
 list<Def> defs;
 int saveCount = 0;
-Def xmlNodeToDef(xml_node<> *node) {
-	Def def;
-	def.definition = node->value();
+Def *xmlNodeToDef(xml_node<> *node) {
+	Def *def = (Def*)calloc(1,sizeof(Def));
+	def->definition = node->value();
 	xml_attribute<> *attr = node->first_attribute();
-	def.word = attr->value();
-	if (attr->next_attribute()) {
-		def.creator = std::stoi(attr->next_attribute()->value());
+	def->word = attr->value();
+	xml_attribute<> *next = attr->next_attribute();
+	if (next) {
+		char* creator = next->value();
+		if (strcmp(creator, "") == 0) {
+			def->creator = 0;
+		}
+		else {
+			def->creator = std::stoi(creator);
+		}
 	}
 	else {
-		def.creator = 0;
+		def->creator = 0;
 	}
 	return def;
 }
 int readDefs() {
 	int i = 0;
 	ifstream myxml("LearnerDefs.xml");
+	defs.clear();
+	CQ_addLog(ac, CQLOG_DEBUG, "学习者","Load XML start");
 	if (myxml.is_open()) {
 		stringstream buffer;
 		buffer << myxml.rdbuf();
@@ -58,10 +67,10 @@ int readDefs() {
 		if (root) {
 			xml_node<> *defnode = root->first_node();
 			while (defnode) {
-				Def def = xmlNodeToDef(defnode);
+				Def *def = xmlNodeToDef(defnode);
 				i++;				
-				CQ_addLog(ac, CQLOG_DEBUG, def.word.c_str(), def.definition.c_str());
-				defs.push_back(def);
+				CQ_addLog(ac, CQLOG_DEBUG, "载入词条", (def->word + "," + def->definition + "," + std::to_string(def->creator)).c_str());
+				defs.push_back(*def);
 				defnode = defnode->next_sibling();				
 			}
 		}
@@ -70,9 +79,8 @@ int readDefs() {
 	CQ_addLog(ac, CQLOG_INFO, "载入词条", std::to_string(i).c_str());
 	return 0;
 }
-int saveDefs(bool force) {
-	
-	CQ_addLog(ac, CQLOG_INFO, "保存", std::to_string(saveCount).c_str());
+int saveDefs(bool force) {	
+	CQ_addLog(ac, CQLOG_INFO, "保存计数", std::to_string(saveCount).c_str());
 	saveCount++;
 	int i = 0;
 	if (saveCount % 5 == 0 || force) {		
@@ -82,17 +90,27 @@ int saveDefs(bool force) {
 		xml_node<> *root = xml.allocate_node(node_element, "Defs");
 		list<Def>::iterator p;
 		for (p = defs.begin(); p != defs.end(); p++) {
-			myfile << p->word << "\n" << p->definition << "\n";
 			xml_node<> *node = xml.allocate_node(node_element, "def", p->definition.c_str());
 			xml_attribute<> *attr = xml.allocate_attribute("word", p->word.c_str());
 			node->append_attribute(attr);
-			xml_attribute<> *attr2 = xml.allocate_attribute("creator", std::to_string(p->creator).c_str());
+			//char* creator = (char*)std::to_string(p->creator).c_str();
+			string creatorstr;
+			xml_attribute<> *attr2;
+			if (p->creator == 0) {
+				creatorstr = "0";
+			}
+			else {
+				creatorstr = std::to_string(p->creator).c_str();
+			}			
+			char *creator = (char*)malloc(sizeof(char)*creatorstr.length());
+			strcpy_s(creator, creatorstr.length(), creatorstr.c_str());
+			attr2 = xml.allocate_attribute("creator", creator);
 			node->append_attribute(attr2);
 			root->append_node(node);
+			CQ_addLog(ac, CQLOG_DEBUG, "保存词条", creator);
 			i++;
 		}
 		xml.append_node(root);
-		myfile.close();
 		ofstream myxml;
 		myxml.open("LearnerDefs.xml");
 		myxml << xml;
@@ -203,21 +221,48 @@ int ProcessMessage(int32_t subType, int32_t sendTime, int64_t fromGroup, int64_t
 		return EVENT_BLOCK;
 	}
 	if (str.substr(0, 6) == "！显示") {
-		int j = 0;
 		string result;
-		bool flag = false;
-		for (lp = defs.begin(); lp != defs.end(); lp++) {
-			if (j > 10) {
-				break;
+		if (str.length() == 6) {
+			//显示自己的定义
+			int j = 0;			
+			bool flag = false;
+			for (lp = defs.begin(); lp != defs.end(); lp++) {
+				if (lp->creator == fromQQ) {
+					flag = true;
+					j++;
+					result = result + "“" + lp->word + "”对应“" + lp->definition + "”\n";
+				}
 			}
-			flag = true;
-			j++;
-			result = result + "“" + lp->word + "”对应“" + lp->definition + "”\n";			
+			if (flag) {
+				result = "由" + std::to_string(fromQQ) + "创建的定义有：\n" + result;
+				result = result.erase(result.size() - 1);
+			}
+			else {
+				result = std::to_string(fromQQ) + "没有创建任何定义";
+			}			
 		}
-		if (flag) {
-			result = result.erase(result.size() - 1);
-			sendQQMessage(fromGroup, fromQQ, result.c_str());
-		}		
+		else {
+			string word = str.substr(6, str.length());
+			CQ_addLog(ac, CQLOG_DEBUG, "显示", word.c_str());
+			bool flag = false;
+			int j = 0;
+			for (lp = defs.begin(); lp != defs.end(); lp++) {
+				if (lp->word == word) {
+					flag = true;
+					j++;
+					result = result + std::to_string(lp->creator) + ":“" + lp->definition + "”\n";
+				}
+			}
+			if (flag) {
+				result = "对“" + word + "”的定义有：\n" + result;
+				result = result.erase(result.size() - 1);
+			}
+			else {
+				result = "“" + word + "”暂时没有任何定义";
+			}
+
+		}
+		sendQQMessage(fromGroup, fromQQ, result.c_str());
 		return EVENT_BLOCK;
 	}
 	if (str.substr(0, 6) == "！保存"){
