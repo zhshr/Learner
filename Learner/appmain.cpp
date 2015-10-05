@@ -67,7 +67,7 @@ CQEVENT(int32_t, __eventExit, 0)() {
 CQEVENT(int32_t, __eventEnable, 0)() {
 	enabled = true;
 	readDefs();
-	CQ_sendGroupMsg(ac, 493759584, "滴答，机器人刚刚重启啦~~");
+	//CQ_sendGroupMsg(ac, 493759584, "滴答，机器人刚刚重启啦~~");
 	return 0;
 }
 
